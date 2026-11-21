@@ -1,0 +1,32 @@
+{
+  "name": "ಶ್ರೀ ವಿಷ್ಣು ಸಹಸ್ರನಾಮ · Śrī Viṣṇu Sahasranāma",
+  "short_name": "ಸಹಸ್ರನಾಮ",
+  "description": "The complete Śrī Viṣṇu Sahasranāma in Kannada script with IAST, for daily pārāyaṇa and study.",
+  "lang": "kn",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0F1736",
+  "theme_color": "#16204A",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
