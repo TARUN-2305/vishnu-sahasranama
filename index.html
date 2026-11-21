@@ -356,7 +356,13 @@ body[data-mode="read"] .study { display: none; }
 .insight .i-kind { display: inline-block; font: 600 .68rem/1.4 var(--ui-font); letter-spacing: .1em; text-transform: uppercase; color: var(--gold-lo); margin-bottom: .25rem; }
 .insight.editorial .i-kind { color: var(--ink-3); }
 .insight p { margin: 0; font-family: var(--rm-font); font-size: .95rem; line-height: 1.65; }
-.study-nav { display: flex; justify-content: space-between; gap: .5rem; padding-top: .5rem; border-top: 1px solid var(--rule); }
+.study-nav { display: flex; justify-content: space-between; gap: .6rem; margin-top: .4rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+.study-nav .btn-leaf { flex: 0 1 48%; min-height: 3.1rem; padding: .45rem .75rem; gap: .5rem; text-align: left; }
+.study-nav .nav-next { justify-content: flex-end; text-align: right; }
+.study-nav .btn-leaf > span { display: grid; line-height: 1.25; min-width: 0; }
+.study-nav small { font: 600 .66rem/1.3 var(--ui-font); letter-spacing: .1em; text-transform: uppercase; color: var(--gold-lo); }
+.study-nav [lang="sa-Knda"] { font-family: var(--kn-font); font-size: .98rem; overflow-wrap: anywhere; }
+.study-nav .btn-leaf:hover { background: var(--leaf-2); }
 .btn-leaf {
   display: inline-flex; align-items: center; gap: .35rem; min-height: 2.5rem; padding: .35rem .8rem; border-radius: 6px;
   background: var(--leaf); color: var(--ink); border: 1px solid var(--rule);
@@ -887,7 +893,7 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
     const before = node.getBoundingClientRect().top;
     clearInline();
     const shift = node.getBoundingClientRect().top - before;
-    if (shift) { lockUntil = Date.now() + 250; window.scrollBy(0, shift); }
+    if (shift) { lock(250); window.scrollBy(0, shift); }
     select(id, { scroll: false, notes: false });
   }
 
@@ -907,6 +913,8 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
   // After a jump, search or resize the target stays current until the reader scrolls again.
   let lockUntil = 0;
   const locked = () => Date.now() < lockUntil;
+  // Pause tracking for at least `ms`; a shorter request never cuts a longer pause short.
+  const lock = ms => { lockUntil = Math.max(lockUntil, Date.now() + ms); };
   let io;
   function observe() {
     if (io) io.disconnect();
@@ -929,9 +937,9 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
       const node = currentId && document.getElementById("v-" + currentId);
       if (!node) return;
       if (rzTop === null) rzTop = node.getBoundingClientRect().top;
-      lockUntil = Date.now() + 600;
+      lock(600);
       clearTimeout(rzT);
-      rzT = setTimeout(() => { window.scrollBy(0, node.getBoundingClientRect().top - rzTop); rzTop = null; lockUntil = Date.now() + 300; }, 150);
+      rzT = setTimeout(() => { window.scrollBy(0, node.getBoundingClientRect().top - rzTop); rzTop = null; lock(300); }, 150);
     });
   }
 
@@ -941,7 +949,7 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
   function goTo(id, { flash = false, smooth = true, block = "start" } = {}) {
     const node = document.getElementById("v-" + id);
     if (!node) return;
-    lockUntil = Date.now() + 1400;            // smooth scrolling passes other verses; they must not become "current"
+    lock(1400);            // smooth scrolling passes other verses; they must not become "current"
     node.scrollIntoView({ behavior: smooth && !reduceMotion() ? "smooth" : "auto", block });
     setCurrent(id);
     if (flash) {
@@ -964,7 +972,7 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
     const anchorId = currentId;
     const anchor = anchorId && document.getElementById("v-" + anchorId);
     const offset = anchor ? anchor.getBoundingClientRect().top : 0;
-    lockUntil = Date.now() + 500;
+    lock(500);
     prefs.mode = mode; savePrefs();
     document.body.dataset.mode = mode;
     $$(".modes button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
@@ -1008,6 +1016,16 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
       h += `<section class="s-sec"><h3>Deeper insight</h3>` + v.insights.map(i =>
         `<div class="insight ${i.kind}"><span class="i-kind">${i.kind === "traditional" ? "Traditional interpretation" : "Editorial note"}</span><p lang="en">${esc(i.text)}</p></div>`).join("") + `</section>`;
     }
+    // Previous / next at the foot of the notes, where the reader arrives after reading them.
+    // "ಶ್ಲೋಕ ೧೧" within the section; the section's name only when the neighbour starts a new one
+    const ref = w => `${w.section === v.section ? "ಶ್ಲೋಕ" : esc(SEC[w.section].short || SEC[w.section].kn)} ${knNum(w.n)}`;
+    const pv = verses[v.idx - 1], nx = verses[v.idx + 1];
+    h += `<nav class="study-nav" aria-label="Move between verses">` +
+      (pv ? `<button class="btn-leaf nav-prev" type="button" data-act="prev"><svg class="icon"><use href="#i-prev"/></svg>` +
+            `<span><small>Previous</small><span lang="sa-Knda">${ref(pv)}</span></span></button>` : `<span></span>`) +
+      (nx ? `<button class="btn-leaf nav-next" type="button" data-act="next">` +
+            `<span><small>Next</small><span lang="sa-Knda">${ref(nx)}</span></span><svg class="icon"><use href="#i-next"/></svg></button>` : `<span></span>`) +
+      `</nav>`;
     h += `</div>`;
     return h;
   }
@@ -1044,7 +1062,10 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
     if (scroll) {
       const r = node.getBoundingClientRect();
       const top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--mast-h")) * 16 || 56;
-      if (r.top < top + 8 || r.top > window.innerHeight * .6) node.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
+      if (r.top < top + 8 || r.top > window.innerHeight * .6) {
+        lock(1400);      // verses passed while scrolling must not take the selection
+        node.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
+      }
     }
   }
 
@@ -1053,7 +1074,7 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
     const base = byId[selectedId || currentId] || verses[0];
     const next = verses[base.idx + dir];
     if (!next) return;
-    lockUntil = Date.now() + 1400;          // the scroll passes other verses; they must not take the focus
+    lock(1400);          // the scroll passes other verses; they must not take the focus
     select(next.id, { scroll: false });
     document.getElementById("v-" + next.id).scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
   }
@@ -1152,7 +1173,7 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
   }
   // Changing size or spacing re-flows the page; keep the current verse in place.
   function withAnchor(fn) {
-    lockUntil = Date.now() + 500;
+    lock(500);
     const node = currentId && document.getElementById("v-" + currentId);
     const top = node ? node.getBoundingClientRect().top : 0;
     fn();
