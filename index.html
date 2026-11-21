@@ -875,6 +875,20 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
     $$("#toc button").forEach(b => b.setAttribute("aria-current", String(b.dataset.sec === v.section)));
     updateProgress(v);
     if (save) { pos = { id, at: Date.now() }; queueSave(); }
+    // In Study mode the selected verse and the reading focus are always the same verse.
+    if (prefs.mode === "study" && id !== selectedId) followSelection(id);
+  }
+
+  // Scrolling in Study mode carries the selection along. On wide screens the panel follows;
+  // on phones the open notes close (without the page jumping) and reopen with a tap.
+  function followSelection(id) {
+    if (wide()) { select(id, { scroll: false }); return; }
+    const node = document.getElementById("v-" + id);
+    const before = node.getBoundingClientRect().top;
+    clearInline();
+    const shift = node.getBoundingClientRect().top - before;
+    if (shift) { lockUntil = Date.now() + 250; window.scrollBy(0, shift); }
+    select(id, { scroll: false, notes: false });
   }
 
   let saveT = 0;
@@ -955,10 +969,14 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
     document.body.dataset.mode = mode;
     $$(".modes button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
     if (mode === "study") {
-      select(selectedId || anchorId || verses[0].id, { scroll: false });
+      select(anchorId || verses[0].id, { scroll: false });   // study starts on the verse being read
     } else {
       clearInline();
+      const s = selectedId && document.getElementById("v-" + selectedId);
+      if (s) s.classList.remove("selected");
+      selectedId = null;
     }
+    prepareVerseA11y();
     if (keep && anchor) {
       const delta = anchor.getBoundingClientRect().top - offset;
       window.scrollBy(0, delta);
@@ -979,7 +997,7 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
       `<span class="s-rm">${esc(sec.rm)} ${v.n}${range ? " · " + range : ""}</span></div>` +
       `<button class="icon-btn" type="button" data-act="prev" aria-label="Previous verse"${v.idx === 0 ? " disabled" : ""}><svg class="icon"><use href="#i-prev"/></svg></button>` +
       `<button class="icon-btn" type="button" data-act="next" aria-label="Next verse"${v.idx === total - 1 ? " disabled" : ""}><svg class="icon"><use href="#i-next"/></svg></button>` +
-      (inline ? `<button class="icon-btn" type="button" data-act="close" aria-label="Close notes"><svg class="icon"><use href="#i-close"/></svg></button>` : "") +
+      `<button class="icon-btn" type="button" data-act="close" aria-label="Close study, back to Pārāyaṇa" title="Back to ಪಾರಾಯಣ"><svg class="icon"><use href="#i-close"/></svg></button>` +
       `</div><div class="study-body">`;
     h += `<section class="s-sec"><h3>Meaning</h3><p class="s-en" lang="en">${esc(v.en)}</p></section>`;
     h += `<section class="s-sec"><h3><span class="h-kn" lang="kn">ಪದಗಳ ಅರ್ಥ</span>Word by word</h3><dl class="words">` +
@@ -996,12 +1014,13 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
 
   function clearInline() { $$(".inline-study").forEach(n => n.remove()); }
 
-  function select(id, { scroll = true } = {}) {
+  function select(id, { scroll = true, notes = true } = {}) {
     const v = byId[id];
     if (!v) return;
     const prevNode = selectedId && document.getElementById("v-" + selectedId);
     if (prevNode) { prevNode.classList.remove("selected"); prevNode.setAttribute("aria-expanded", "false"); }
     selectedId = id;
+    setCurrent(id);                         // selection and focus are one verse (set after selectedId, so no re-entry)
     const node = document.getElementById("v-" + id);
     node.classList.add("selected");
     node.setAttribute("aria-expanded", "true");
@@ -1011,9 +1030,15 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
     panel.scrollTop = 0;
     // mobile inline notes
     clearInline();
-    if (!wide()) {
+    if (!wide() && notes) {
       const box = el("div", "inline-study", studyHTML(v, { inline: true }));
-      box.addEventListener("click", e => e.stopPropagation());
+      // The notes sit inside the verse: handle their buttons here and keep other taps
+      // from reaching the verse (which would toggle the notes).
+      box.addEventListener("click", e => {
+        e.stopPropagation();
+        const act = e.target.closest("[data-act]");
+        if (act) studyAction(act.dataset.act);
+      });
       node.appendChild(box);
     }
     if (scroll) {
@@ -1023,10 +1048,14 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
     }
   }
 
+  // ‹ › and j/k: move to the previous/next śloka, bring it to the top, open its notes.
   function step(dir) {
     const base = byId[selectedId || currentId] || verses[0];
     const next = verses[base.idx + dir];
-    if (next) { select(next.id); setCurrent(next.id); }
+    if (!next) return;
+    lockUntil = Date.now() + 1400;          // the scroll passes other verses; they must not take the focus
+    select(next.id, { scroll: false });
+    document.getElementById("v-" + next.id).scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
   }
 
   function prepareVerseA11y() {
@@ -1149,7 +1178,7 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
      Wiring
      ================================================================= */
   function wire() {
-    $$(".modes button").forEach(b => b.addEventListener("click", () => { setMode(b.dataset.mode); prepareVerseA11y(); }));
+    $$(".modes button").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
 
     textRoot.addEventListener("click", e => {
       if (prefs.mode !== "study") return;
@@ -1159,9 +1188,9 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
       const v = e.target.closest(".verse");
       if (!v) return;
       if (window.getSelection && String(window.getSelection()).length > 0) return;   // allow copying text
-      if (v.dataset.id === selectedId && !wide()) { clearInline(); v.classList.remove("selected"); selectedId = null; return; }
+      // Phone: tapping the selected verse shows or hides its notes; the verse stays selected.
+      if (v.dataset.id === selectedId && !wide() && v.querySelector(".inline-study")) { clearInline(); return; }
       select(v.dataset.id, { scroll: !wide() });
-      setCurrent(v.dataset.id);
     });
     textRoot.addEventListener("keydown", e => {
       if (prefs.mode !== "study") return;
@@ -1242,7 +1271,10 @@ const SVS_DATA = {"verses":[{"id":"purva-1","section":"purva","n":1,"speaker":nu
   function studyAction(act) {
     if (act === "prev") step(-1);
     else if (act === "next") step(1);
-    else if (act === "close") { clearInline(); const n = selectedId && document.getElementById("v-" + selectedId); if (n) { n.classList.remove("selected"); n.focus({ preventScroll: true }); } selectedId = null; }
+    else if (act === "close") {           // × leaves Study and returns to Pārāyaṇa at the same verse
+      setMode("read");
+      $('.modes [data-mode="read"]').focus({ preventScroll: true });
+    }
   }
 
   /* ---------- Cakra spokes and flames: drawn once into the symbol ---------- */
